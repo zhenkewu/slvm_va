@@ -3,7 +3,7 @@ title: "fit_rewind_to_va"
 output: html_document
 ---
 
-##
+## Structured Latent Variable Model to Verbal Autopsy Data
 
 This code loads in the PHMRC VA data and fits it to the RLCM developed in the rewind package 
 
