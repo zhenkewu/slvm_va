@@ -31,7 +31,7 @@ binaryMatrix <- vaMatrix[, colSums(is.na(vaMatrix)) <= 0.05*nrow(vaMatrix),with=
 ## remove the rows that have at least 1 NA 
 binarySubset <- na.omit(binaryMatrix)
 
-sampleData  <- binarySubset[sample(nrow(binarySubset),100),]
+sampleData  <- binarySubset[sample(nrow(binarySubset),300),]
 
 ## Keep the "gold standard" diagnoses for evaluation after the model is done 
 truth_values <- sampleData[,c(1:2)]
