@@ -10,7 +10,7 @@ library(lattice)
 library(gplots)
 
 ## current date: 
-current_date <- "09052019"
+current_date <- "09192019"
 
 ## download the PHMRC data, using the openVA package:
 PHMRC_full <- data.table(read.csv(getPHMRC_url("adult")))
@@ -33,7 +33,10 @@ convert.default <- ConvertData.phmrc(PHMRC_full, phmrc.type = "adult",
 convertedData <- data.table(convert.default$output)
 
 ## 7/19 - join site and death date to the cleaned dataset 
-fullData <- merge(demo_vars, convertedData, by.x="newid",by.y= "ID", all.y=TRUE)
+
+### 9/19 - update: Richard says that "newid" and "ID" are not equivalent
+# just cbind the two datasets 
+fullData <- cbind(demo_vars, convertedData)
 
 
 ## convert the Yes values to 1 

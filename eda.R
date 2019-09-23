@@ -10,13 +10,20 @@ rm(list=ls())
 library(data.table)
 library(ggplot2)
 library(plyr)
+library(dplyr)
+library(readxl)
 ##----------------------------
 ### load the VA datasets ### 
 ##----------------------------
-setwd("~/Dropbox/Irena/verbal_autopsy_data/")
-va_adult_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_ADULT_Y2013M09D11_0.csv"))
-va_child_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_CHILD_Y2013M09D11_0.csv"))
-va_neonate_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_NEONATE_Y2013M09D11_0.csv"))
+ 
+setwd("/Users/irena/repos/slvm_va/data_files/")
+dataFreeze <-  data.table(read.csv("data_freeze_09192019.csv"))
+dataDict <- data.table(read_excel("data_dictionary.xlsx"))
+
+##setwd("~/Dropbox/Irena/verbal_autopsy_data/")
+# va_adult_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_ADULT_Y2013M09D11_0.csv"))
+# va_child_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_CHILD_Y2013M09D11_0.csv"))
+# va_neonate_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_NEONATE_Y2013M09D11_0.csv"))
 
 ##----------------------------
 ###  ADULT VA exploration ### 
@@ -25,24 +32,34 @@ va_neonate_data <- data.table(read.csv("IHME_PHMRC_VA_DATA_NEONATE_Y2013M09D11_0
 
 ### First, we should check for missing values: 
 
-colnames(va_adult_data)[colSums(is.na(va_adult_data)) > 0]
+## names of the columns w/ missing values
+colnames(dataFreeze)[colSums(is.na(dataFreeze)) > 0]
+# count how many: 
+length(colnames(dataFreeze)[colSums(is.na(dataFreeze)) > 0])
 
-## 22 variables actually contain missing values: 
+## 135 columns have missing values (responses that were "Don't Know/Refused to Answer", or just NA originally)
+na_cols <- colnames(dataFreeze)[colSums(is.na(dataFreeze)) > 0]
+na_matrix <- dataFreeze[,na_cols, with=FALSE]
 
-#g1_06y -> year of death
-# g1_07b -> last known age of deceased (months)
-# g1_07b -> last known age of deceased (days)
-# g2_03ay	 -> Date of first interview attempt [year]
-# g2_03bd	 -> Date and time arranged for second interview attempt [day]
-# g2_03cd -> Date and time arranged for third interview attempt [day]
-# g2_03cy	-> Date and time arranged for third interview attempt [year]
+na_matrix_sum <- na_matrix[, lapply(.SD, function(x) sum(is.na(x))), .SDcols = na_cols]
 
+## this means nothing, just to melt the dataset easily
+na_matrix_sum$q_type <- "symptom"
 
+# easily see which variables contain the most missing values 
+na_matrix_long <- melt(na_matrix_sum, id.vars ="q_type", variable.name = "id")
+na_matrix_long$perc_missing <- na_matrix_long$value/7841
 
+shorthandID <- dataDict[, c("IHME_code","short_label"), with=FALSE]
+              
+na_matrix_long <- merge(na_matrix_long, shorthandID, by.x="id", by.y = "IHME_code", all.x=TRUE)
 
-va_adult_data$death <- 1 
+# ---------------------------------
+## Make some graphs of CoD Distributions 
+# --------------------------------
+dataFreeze$death <- 1 
 
-# va_adult_data$female <- ifelse(va_adult_data$g1_05=="Female",1,0) # convert the gender variable to 1-0 
+dataFreeze$sex <- ifelse(dataFreeze$g1_05==1, "Female", "Male") #get gender for plotting purposes
 
 ## we can get the approximate age of the respondents by using the birth date and the death date 
 # birth_dates <- paste(va_adult_data$g1_01y, va_adult_data$g1_01m,va_adult_data$g1_01d,sep="-")
@@ -54,15 +71,14 @@ va_adult_data$death <- 1
 
 ### 
 
-graphData <- va_adult_data[,list(death_count=sum(death)), by=c("gs_level","gs_code34","gs_text34",  #main CoD 
-                                                               "gs_code46" , "gs_text46","gs_code55","gs_text55", #more detailed CoD
-                                                               "site")]
+graphData <- dataFreeze[,list(death_count=sum(death)), by=c("gs_text34",#main CoD 
+                                                            "g4_08", #separate room for cooking
+                                                            "g5_06a", "g5_06b", # education level + # of years of education 
+                                                            "site", "sex")]
 
 
 ### Since there are a relatively high # of unique CoD, we will create a meta-category column to group similar CoD 
 ## generally following what the IHME website has: 
-
-
 
 create_meta_adult_cod <- function(x){
   category = x
@@ -101,7 +117,8 @@ graphData$meta_cod <- mapply(create_meta_adult_cod, graphData$gs_text34)
 ## raw counts of death 
 ggplot(data=graphData)+ 
   geom_bar(mapping = aes(x = meta_cod, y = death_count,  fill=meta_cod), stat = "identity")  +
-  labs(title="IHME VA Dataset: Adult Causes of Death", fill = "Cause of Death")
+  labs(title="IHME VA Dataset: Adult Causes of Death", 
+       fill = "Cause of Death", x="CoD Category", y="Number of Deaths")
 
 
 ## % of deaths 
@@ -109,7 +126,8 @@ ggplot(data=graphData)+
 ggplot(data=graphData)+ 
   geom_bar(mapping = aes(x = meta_cod, y = death_count/sum(death_count),  fill=meta_cod), stat = "identity")  +
   scale_y_continuous(labels = scales::percent) +
-  labs(title="IHME VA Dataset: Adult Causes of Death", fill = "Cause of Death")
+  labs(title="IHME VA Dataset: Adult Causes of Death", fill = "Cause of Death",
+       x="CoD Category", y="% of Deaths")
 
 
 ## display the causes of death in each meta category 
@@ -124,7 +142,21 @@ for(k in unique(graphData$meta_cod)){
 }
 
 
-## display the causes of death in each meta category 
+## display the causes of death in each meta category by site location
+
+## since males don't die of maternal causes, just make the bar zero: 
+maleMaternal <- data.frame(cbind(site=unique(levels(graphData$site)), 
+                                 meta_cod =rep("Maternal", 6),death_count= rep(0,6),
+                                 sex= rep("Male",6),
+                                 "gs_text34" = rep("Maternal",6),#main CoD 
+                                 "g4_08"=rep(NA,6), #separate room for cooking
+                                 "g5_06a"=rep(NA,6), 
+                                 "g5_06b"=rep(NA,6)
+), stringsAsFactors = FALSE)
+graphData <-  rbind(graphData,maleMaternal)
+graphData$death_count <- as.numeric(graphData$death_count)
+
+
 site_plots <- list()
 for(k in unique(graphData$site)){
   subset <- graphData[site==k]
@@ -136,80 +168,65 @@ for(k in unique(graphData$site)){
     labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death")
 }
 
+## site and sex plots 
+site_and_sex_plots <- list()
+for(k in unique(graphData$site)){
+  subset <- graphData[site==k]
+  site_and_sex_plots[[k]] <- ggplot(data=subset, aes(meta_cod, death_count/sum(death_count)))+ 
+    geom_bar(mapping = aes(group=sex, fill=sex), position="dodge", stat = "identity")  +
+    scale_y_continuous(labels = scales::percent) +
+    xlab("Meta CoD Category")+
+    ylab("% of Deaths due to Cause") + 
+    labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death")
+  }
 
-### education levels? 
+## display the causes of death in each meta category by sex
+sex_plots <- list()
+for(k in unique(graphData$sex)){
+  subset <- graphData[sex==k]
+  sex_plots[[k]] <- ggplot(data=subset)+ 
+    geom_bar(mapping = aes(x = meta_cod, y = death_count/sum(death_count),  fill=meta_cod), stat = "identity")  +
+    scale_y_continuous(labels = scales::percent) +
+    xlab("Meta CoD Category")+
+    ylab("% of Deaths due to Cause") + 
+    labs(title=paste0("Cause of Death by Category for Sex= ", k), fill = "Cause of Death")
+}
+
+
+maleDataset <- graphData[sex=="Male"]
+femaleDataset <- graphData[sex=="Female"]
+
+
+male_cod_plots <- list()
+for(k in unique(maleDataset$meta_cod)){
+  subset <- maleDataset[meta_cod==k]
+  male_cod_plots[[k]] <- ggplot(data=subset)+ 
+    geom_bar(mapping = aes(x = gs_text34, y = death_count/sum(death_count),  fill=gs_text34), 
+             stat = "identity")  +
+    scale_y_continuous(labels = scales::percent) +
+    xlab("Meta CoD Category")+
+    ylab("% of Deaths due to Cause") + 
+    labs(title=paste0("Cause of Death for Males by Category in ", k), fill = "Cause of Death")
+}
+
+female_cod_plots <- list()
+for(k in unique(femaleDataset$meta_cod)){
+  subset <- femaleDataset[meta_cod==k]
+  female_cod_plots[[k]] <- ggplot(data=subset)+ 
+    geom_bar(mapping = aes(x = gs_text34, y = death_count/sum(death_count),  fill=gs_text34), 
+             stat = "identity")  +
+    scale_y_continuous(labels = scales::percent) +
+    xlab("Meta CoD Category")+
+    ylab("% of Deaths due to Cause") + 
+    labs(title=paste0("Cause of Death for Females by Category in ", k), fill = "Cause of Death")
+}
+
 
 
 ## gender/age
 
 
 ## seasonality
-
-
-
-
-
-
-
-
-
-
-
-##----------------------------
-### # Conversion of polytomous symptoms into dichotomous symptoms  ### 
-##----------------------------
-
-
-## turn fever into dichotomos (was there moderate/severe fever?)
-convert_fever <- function(x) {
-  response = "Y"
-  if(grepl(paste(c("Moderate", "Severe"), collapse = "|"), x)){
-    response = response
-  }else if(grepl("Mild", x)){
-    response = "N"
-  } else {
-    response = "." ## covnert Don't know to Missing 
-  }
-  return(response)
-}
-
-
-
-##----------------------------
-###  CHILD VA exploration ### 
-##----------------------------
-## Visualize the main CoD for children in this dataset 
-va_child_data$death <- 1 
-graphData <- va_child_data[,list(death_count=sum(death)), by=c("gs_text34", "site")]
-
-
-
-### Since there are a relatively high # of unique CoD, we will create a meta-category column to group similar CoD 
-## generally following what the IHME website has: 
-
-create_meta_child_cod <- function(x){
-  category = x
-  if(grepl(x, c("Bite of Venomous Animal", "Violent Death", "Road Traffic", "Poisonings", "Drowning", "Falls", "Fires"))){
-    category = "External"
-  } else if(grepl(x, c("Encephalitis", "Meningitis", "Measles","Hemorrhagic fever", "Other Infectious Diseases"))){
-    category = "Infectious"
-  } else if(grepl(x,c("Malaria","AIDS"))){
-    category = "Global Epidemic"
-  }else if(grepl(x, c("Diarrhea/Dysentery", "Other Digestive Diseases"))){
-    category = "Digestive"
-  } else if (grepl(x, c("Other Cancers", "Other Defined Causes of Child Deaths"))){
-    category = "Other"
-  }
-}
-
-## DAR = 
-## UP = 
-## AP = 
-## 
-
-ggplot(graphData, aes()) + 
-  facet_wrap(~site) 
-  
 
 
 
