@@ -10,7 +10,7 @@ library(lattice)
 library(gplots)
 
 ## current date: 
-current_date <- "09192019"
+current_date <- "10062019"
 
 ## download the PHMRC data, using the openVA package:
 PHMRC_full <- data.table(read.csv(getPHMRC_url("adult")))

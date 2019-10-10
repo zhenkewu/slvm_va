@@ -17,7 +17,7 @@ library(readxl)
 ##----------------------------
  
 setwd("/Users/irena/repos/slvm_va/data_files/")
-dataFreeze <-  data.table(read.csv("data_freeze_09192019.csv"))
+dataFreeze <-  data.table(read.csv("data_freeze_10062019.csv"))
 dataDict <- data.table(read_excel("data_dictionary.xlsx"))
 
 ##setwd("~/Dropbox/Irena/verbal_autopsy_data/")
@@ -61,6 +61,8 @@ dataFreeze$death <- 1
 
 dataFreeze$sex <- ifelse(dataFreeze$g1_05==1, "Female", "Male") #get gender for plotting purposes
 
+## month of birth date and month of death date 
+
 ## we can get the approximate age of the respondents by using the birth date and the death date 
 # birth_dates <- paste(va_adult_data$g1_01y, va_adult_data$g1_01m,va_adult_data$g1_01d,sep="-")
 # va_adult_data$birth_date <- strptime(birth_dates,format="%Y-%b-%d")
@@ -70,7 +72,8 @@ dataFreeze$sex <- ifelse(dataFreeze$g1_05==1, "Female", "Male") #get gender for 
 # va_adult_data$cod_date <- strptime(cod_dates,format="%Y-%b-%d")
 
 ### 
-
+dataFreeze$death <- 1
+dataFreeze$sex <- ifelse(dataFreeze$g1_05==1, "Female", "Male") 
 graphData <- dataFreeze[,list(death_count=sum(death)), by=c("gs_text34",#main CoD 
                                                             "g4_08", #separate room for cooking
                                                             "g5_06a", "g5_06b", # education level + # of years of education 
@@ -120,7 +123,10 @@ ggplot(data=graphData)+
   labs(title="IHME VA Dataset: Adult Causes of Death", 
        fill = "Cause of Death", x="CoD Category", y="Number of Deaths")
 
-
+## fit a multinomial regression using CoD as response variable 
+##and the regression variables as the predictors 
+# We want to do this to assess initially if there is a relationship between these variables
+## Future: we want to fit semi supervised models 
 ## % of deaths 
 
 ggplot(data=graphData)+ 
@@ -138,7 +144,8 @@ for(k in unique(graphData$meta_cod)){
     geom_bar(mapping = aes(x = gs_text34, y = death_count,  fill=gs_text34), stat = "identity")  +
     xlab("CoD Category")+
     ylab("Number of Deaths due to Cause") + 
-    labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death")
+    labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death") +
+    theme(axis.text.y = element_text(angle = 90, hjust = 1))
 }
 
 
@@ -163,10 +170,16 @@ for(k in unique(graphData$site)){
   site_plots[[k]] <- ggplot(data=subset)+ 
     geom_bar(mapping = aes(x = meta_cod, y = death_count/sum(death_count),  fill=meta_cod), stat = "identity")  +
     scale_y_continuous(labels = scales::percent) +
-    xlab("Meta CoD Category")+
+    xlab("Category")+
     ylab("% of Deaths due to Cause") + 
-    labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death")
+    labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death") +
+    theme(axis.text.x = element_text(angle =45, vjust = 1, hjust = 1))
 }
+
+
+pdf("site_plots.pdf")
+invisible(lapply(site_plots, print))
+dev.off()
 
 ## site and sex plots 
 site_and_sex_plots <- list()
@@ -178,7 +191,12 @@ for(k in unique(graphData$site)){
     xlab("Meta CoD Category")+
     ylab("% of Deaths due to Cause") + 
     labs(title=paste0("Cause of Death by Category in ", k), fill = "Cause of Death")
-  }
+}
+
+
+pdf("site_and_sex_plots.pdf")
+invisible(lapply(site_and_sex_plots, print))
+dev.off()
 
 ## display the causes of death in each meta category by sex
 sex_plots <- list()
