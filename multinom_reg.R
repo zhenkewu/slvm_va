@@ -102,13 +102,30 @@ regData_noNA$g5_06a <- relevel(regData_noNA$g5_06a,"Primary School")
 # regData_noNA[,list(death_count=sum(death)), by=c("g5_06b")]
 # regData_noNA$g5_06b <- relevel(regData_noNA$g5_06b, "0")
 
+### make "Yes" the reference for "do you have a separate room for cooking" 
+regData_noNA[,list(death_count=sum(death)), by=c("g4_08")]
+regData_noNA$g4_08 <- relevel(regData_noNA$g4_08, "Yes")
+
+
 ### make CVD the reference category for the broader/coarser causes of death 
+regData_noNA[,list(death_count=sum(death)), by=c("meta_cod")]
 regData_noNA$meta_cod <- as.factor(regData_noNA$meta_cod)
 regData_noNA$meta_cod <- relevel(regData_noNA$meta_cod, "CVD")
 
+### make Mexico the reference category for the broader/coarser causes of death 
+regData_noNA[,list(death_count=sum(death)), by=c("site")]
 regData_noNA$site <- relevel(regData_noNA$site,"Mexico")
 
-multinom_explore <- multinom(formula =meta_cod~ site + as.factor(sex) +g4_08 + g5_06a + g1_06m, 
+
+### make male the reference for sex variable: 
+regData_noNA[,list(death_count=sum(death)), by=c("sex")]
+regData_noNA$sex <- as.factor(regData_noNA$sex)
+regData_noNA$sex <- relevel(regData_noNA$sex, "Male")
+
+##### -------------------------
+## Multinomial regression 
+##### -------------------------
+multinom_explore <- multinom(formula =meta_cod~ site + sex +g4_08 + g5_06a + g1_06m, 
                 data = regData_noNA,maxit=1000,
                 family="multinomial",MaxNWts =1000, reltol=1.0e-12)
 
@@ -117,19 +134,15 @@ multinom_results <- coef(multinom_explore)
 multinom_tidy <- tidy(multinom_explore)
 multinom_std <- multinom_tidy$std.error
 
-multinom_tidy$multinom_coef_se <- paste0(round(multinom_tidy$estimate, 4), " (", round(multinom_tidy$std.error,4), ")")
-
 plot(density(abs(colSums(multinom_results))))
-
-result.df <- data.frame(multinom_results, row.names = TRUE)
 
 heatmap.2(multinom_results,col=blueyelred,margins = c(10, 8))
 
 
 xform <- list(categoryorder = "array",
               categoryarray = c("(Intercept)",
-                                "as.factor(sex)Male",
-                                "g4_08Yes",
+                                "sexFemale",
+                                "g4_08No",
                                 "siteAP",
                                 "siteUP",
                                 "siteBohol",
@@ -138,7 +151,7 @@ xform <- list(categoryorder = "array",
                                 "g5_06aNo Schooling",
                                 "g5_06aHigh School",
                                 "g5_06aCollege or Higher",
-                                "g5_06Unknown",
+                                "g5_06aUnknown",
                                 "g1_06mJanuary",
                                 "g1_06mFebruary",
                                 "g1_06mMarch",
@@ -171,7 +184,10 @@ plot_ly(z=round((multinom_tidy$std.error),3),
 regData_noPemba <- regData_noNA[site!="Pemba"]
 # regData_noPemba <- regData_noPemba[g1_06m!="April"]
 
-multinom_noPemba <- multinom(formula =meta_cod~ site + as.factor(sex) +g4_08 + g5_06a + g1_06m, 
+regData_noPemba$site <- as.character(regData_noPemba$site)
+regData_noPemba$site <- factor(regData_noPemba$site, levels=c("Mexico", "AP", "UP", "Bohol", "Dar"))
+
+multinom_noPemba <- multinom(formula =meta_cod~ site + sex +g4_08 + g5_06a + g1_06m, 
                              data = regData_noPemba,maxit=1000,
                              family="multinomial",MaxNWts =1000, reltol=1.0e-12)
 
@@ -180,15 +196,91 @@ multinom_noPemba <- multinom(formula =meta_cod~ site + as.factor(sex) +g4_08 + g
 tidy_multinom_noPemba <- tidy(multinom_noPemba)
 #multinom_tidy$log_estimate <- log(multinom_tidy$estimate)
 
+xform_noPemba <- list(categoryorder = "array",
+              categoryarray = c("(Intercept)",
+                                "sexFemale",
+                                "g4_08No",
+                                "siteAP",
+                                "siteUP",
+                                "siteBohol",
+                                "siteDar",
+                                "g5_06aNo Schooling",
+                                "g5_06aHigh School",
+                                "g5_06aCollege or Higher",
+                                "g5_06aUnknown",
+                                "g1_06mJanuary",
+                                "g1_06mFebruary",
+                                "g1_06mMarch",
+                                "g1_06mApril",
+                                "g1_06mMay",
+                                "g1_06mJune",
+                                "g1_06mJuly",
+                                "g1_06mAugust",
+                                "g1_06mSeptember",
+                                "g1_06mOctober",
+                                "g1_06mDecember",
+                                "g1_06mDon't Know"))
+
 
 plot_ly(z=round(log(tidy_multinom_noPemba$estimate),3),
         type="heatmap",y=tidy_multinom_noPemba$y.level,x=tidy_multinom_noPemba$term,
         text=paste(
           "std. error:", round(tidy_multinom_noPemba$std.error, 3)
         )) %>%
-          layout(xaxis = xform)
+          layout(xaxis = xform_noPemba)
 
 plot_ly(z=round((tidy_multinom_noPemba$std.error),3),
         type="heatmap",y=tidy_multinom_noPemba$y.level,x=tidy_multinom_noPemba$term) %>%
-  layout(xaxis = xform)
+  layout(xaxis = xform_noPemba)
 
+
+###---------------------
+### DROP "Don't Know" for month of death (there are only six observations)
+###---------------------
+regData_noPemba <- regData_noPemba[g1_06m!="Don't Know"]
+# regData_noPemba <- regData_noPemba[g1_06m!="April"]
+
+regData_noPemba$g1_06m <- as.character(regData_noPemba$g1_06m)
+regData_noPemba$g1_06m <- factor(regData_noPemba$g1_06m)
+regData_noPemba$g1_06m <- relevel(regData_noPemba$g1_06m," November")
+
+multinom_noPemba2 <- multinom(formula =meta_cod~ site + sex +g4_08 + g5_06a + g1_06m, 
+                             data = regData_noPemba,maxit=1000,
+                             family="multinomial",MaxNWts =1000, reltol=1.0e-12)
+
+
+
+tidy_multinom_noPemba2 <- tidy(multinom_noPemba2)
+#multinom_tidy$log_estimate <- log(multinom_tidy$estimate)
+
+xform_noPemba2 <- list(categoryorder = "array",
+                      categoryarray = c("(Intercept)",
+                                        "sexFemale",
+                                        "g4_08No",
+                                        "siteAP",
+                                        "siteUP",
+                                        "siteBohol",
+                                        "siteDar",
+                                        "g5_06aNo Schooling",
+                                        "g5_06aHigh School",
+                                        "g5_06aCollege or Higher",
+                                        "g5_06aUnknown",
+                                        "g1_06mJanuary",
+                                        "g1_06mFebruary",
+                                        "g1_06mMarch",
+                                        "g1_06mApril",
+                                        "g1_06mMay",
+                                        "g1_06mJune",
+                                        "g1_06mJuly",
+                                        "g1_06mAugust",
+                                        "g1_06mSeptember",
+                                        "g1_06mOctober",
+                                        "g1_06mDecember"))
+
+
+plot_ly(z=round(log(tidy_multinom_noPemba2$estimate),3),
+        type="heatmap",y=tidy_multinom_noPemba2$y.level,x=tidy_multinom_noPemba2$term,
+        text=paste(
+          "std. error:", round(tidy_multinom_noPemba2$std.error, 3)
+        )) %>%
+  layout(xaxis = xform_noPemba2)
