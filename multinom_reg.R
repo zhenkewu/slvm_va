@@ -30,7 +30,8 @@ dataDict <- data.table(read_excel("data_dictionary.xlsx"))
 dataFreeze$sex <- ifelse(dataFreeze$g1_05==1, "Female", "Male") 
 regData <- dataFreeze[,  c("gs_text34",#main CoD 
                               "g4_08", #separate room for cooking
-                              "g5_06a", "g5_06b", # education level + # of years of education 
+                             "g5_06a", # education level 
+                           #"g5_06b",  # of years of education 
                               "g1_06y", "g1_06m", "g1_06d", # day, month, year of death 
                               "site", "sex"), with=FALSE]
 
@@ -76,30 +77,32 @@ create_meta_adult_cod <- function(x){
 }
 
 regData_noNA$meta_cod <- mapply(create_meta_adult_cod, regData_noNA$gs_text34)
-
-## check that there are no empty cells for the multinom regression 
-regData_noNA$death <- 1
-graphData <- regData_noNA[,list(death_count=sum(death)), by=c("meta_cod","g4_08", #separate room for cooking
-                                                          "g5_06a", "g5_06b", # education level + # of years of education 
-                                                          "g1_06m", # day, month, year of death 
-                                                          "site", "sex")]
-
-## remove maternal CoD
+## remove maternal CoD - since there will be zero counts for males
 regData_noNA <- regData_noNA[!meta_cod=="Maternal"]
 
-## highest counts of month of death are November
-regData_noNA$month <- copy(regData_noNA$g1_06m)
-regData_noNA[month=="April", month:="May"]
+## -------------------------
+## Check that there are no empty cells for the multinom regression 
+## ------------------------
 
+## highest counts of month of death are November
+regData_noNA$death <- 1
+regData_noNA[,list(death_count=sum(death)), by=c("g1_06m")]
+
+# relevel the month variable so November is the reference category: 
 regData_noNA$g1_06m <- relevel(regData_noNA$g1_06m, " November")
 
+# regData_noNA$month <- copy(regData_noNA$g1_06m)
+# regData_noNA[month=="April", month:="May"]
 
-## reference category: "Primary School" 
+## for level of education: make "Primary School" the reference category: 
+regData_noNA[,list(death_count=sum(death)), by=c("g5_06a")]
 regData_noNA$g5_06a <- relevel(regData_noNA$g5_06a,"Primary School")
 
-## reference category: Don't Know
-regData_noNA$g5_06b <- relevel(regData_noNA$g5_06b, "0")
+## for # of years in school, make 0 the reference category: 10/15 - removed for now because it has many categories
+# regData_noNA[,list(death_count=sum(death)), by=c("g5_06b")]
+# regData_noNA$g5_06b <- relevel(regData_noNA$g5_06b, "0")
 
+### make CVD the reference category for the broader/coarser causes of death 
 regData_noNA$meta_cod <- as.factor(regData_noNA$meta_cod)
 regData_noNA$meta_cod <- relevel(regData_noNA$meta_cod, "CVD")
 
