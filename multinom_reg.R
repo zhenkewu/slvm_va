@@ -89,14 +89,14 @@ regData_noNA$death <- 1
 regData_noNA[,list(death_count=sum(death)), by=c("g1_06m")]
 
 # relevel the month variable so November is the reference category: 
-regData_noNA$g1_06m <- relevel(regData_noNA$g1_06m, " November")
+regData_noNA$g1_06m <- relevel(regData_noNA$g1_06m, "January")
 
 # regData_noNA$month <- copy(regData_noNA$g1_06m)
 # regData_noNA[month=="April", month:="May"]
 
 ## for level of education: make "Primary School" the reference category: 
 regData_noNA[,list(death_count=sum(death)), by=c("g5_06a")]
-regData_noNA$g5_06a <- relevel(regData_noNA$g5_06a,"Primary School")
+regData_noNA$g5_06a <- relevel(regData_noNA$g5_06a,"No Schooling")
 
 ## for # of years in school, make 0 the reference category: 10/15 - removed for now because it has many categories
 # regData_noNA[,list(death_count=sum(death)), by=c("g5_06b")]
@@ -152,7 +152,6 @@ xform <- list(categoryorder = "array",
                                 "g5_06aHigh School",
                                 "g5_06aCollege or Higher",
                                 "g5_06aUnknown",
-                                "g1_06mJanuary",
                                 "g1_06mFebruary",
                                 "g1_06mMarch",
                                 "g1_06mApril",
@@ -162,6 +161,7 @@ xform <- list(categoryorder = "array",
                                 "g1_06mAugust",
                                 "g1_06mSeptember",
                                 "g1_06mOctober",
+                                "g1_06mNovember",
                                 "g1_06mDecember",
                                 "g1_06mDon't Know"))
 
@@ -170,11 +170,11 @@ plot_ly(z=round(log(multinom_tidy$estimate),3),
         text=paste(
           "std. error:", round(multinom_tidy$std.error, 3)
         )) %>%
-  layout(xaxis = xform)
+  layout(xaxis = xform, title="Regression Coefficients")
 
 plot_ly(z=round((multinom_tidy$std.error),3),
         type="heatmap",y=multinom_tidy$y.level,x=multinom_tidy$term) %>%
-  layout(xaxis = xform)
+  layout(xaxis = xform, title="Standard Errors")
 
 
 ###---------------------
@@ -227,17 +227,17 @@ plot_ly(z=round(log(tidy_multinom_noPemba$estimate),3),
         text=paste(
           "std. error:", round(tidy_multinom_noPemba$std.error, 3)
         )) %>%
-          layout(xaxis = xform_noPemba)
+          layout(xaxis = xform_noPemba, title="Regression Coefficients (after excluding Pemba)")
 
 plot_ly(z=round((tidy_multinom_noPemba$std.error),3),
         type="heatmap",y=tidy_multinom_noPemba$y.level,x=tidy_multinom_noPemba$term) %>%
-  layout(xaxis = xform_noPemba)
+  layout(xaxis = xform_noPemba, title="Standard Errors (after excluding Pemba)")
 
 
 ###---------------------
 ### DROP "Don't Know" for month of death (there are only six observations)
 ###---------------------
-regData_noPemba <- regData_noPemba[g1_06m!="Don't Know"]
+regData_noPemba <- regData_noPemba[!g1_06m%in%c("Don't Know")]
 # regData_noPemba <- regData_noPemba[g1_06m!="April"]
 
 regData_noPemba$g1_06m <- as.character(regData_noPemba$g1_06m)
@@ -283,4 +283,12 @@ plot_ly(z=round(log(tidy_multinom_noPemba2$estimate),3),
         text=paste(
           "std. error:", round(tidy_multinom_noPemba2$std.error, 3)
         )) %>%
-  layout(xaxis = xform_noPemba2)
+  layout(xaxis = xform_noPemba2, title="Regression after removing Pemba and Unknown Month of Death")
+
+
+plot_ly(z=round(log(tidy_multinom_noPemba2$std.error),3),
+        type="heatmap",y=tidy_multinom_noPemba2$y.level,x=tidy_multinom_noPemba2$term,
+        text=paste(
+          "std. error:", round(tidy_multinom_noPemba2$std.error, 3)
+        )) %>%
+  layout(xaxis = xform_noPemba2, title="Std. Errors after removing Pemba and Unknown Month of Death") 
