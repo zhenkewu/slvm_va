@@ -136,7 +136,7 @@ multinom_std <- multinom_tidy$std.error
 
 plot(density(abs(colSums(multinom_results))))
 
-heatmap.2(multinom_results,col=blueyelred,margins = c(10, 8))
+#heatmap.2(multinom_results,col=blueyelred,margins = c(10, 8))
 
 
 xform <- list(categoryorder = "array",
@@ -235,14 +235,22 @@ plot_ly(z=round((tidy_multinom_noPemba$std.error),3),
 
 
 ###---------------------
-### DROP "Don't Know" for month of death (there are only six observations)
+### DROP "Don't Know" for month of death (there are only six observations) and level of schooling 
 ###---------------------
 regData_noPemba <- regData_noPemba[!g1_06m%in%c("Don't Know")]
+regData_noPemba <- regData_noPemba[!g5_06a%in%c("Unknown")]
 # regData_noPemba <- regData_noPemba[g1_06m!="April"]
+
 
 regData_noPemba$g1_06m <- as.character(regData_noPemba$g1_06m)
 regData_noPemba$g1_06m <- factor(regData_noPemba$g1_06m)
-regData_noPemba$g1_06m <- relevel(regData_noPemba$g1_06m," November")
+regData_noPemba$g1_06m <- relevel(regData_noPemba$g1_06m,"January")
+
+## revel level of schooling
+regData_noPemba$g5_06a <- as.character(regData_noPemba$g5_06a)
+regData_noPemba$g5_06a<- factor(regData_noPemba$g5_06a)
+regData_noPemba$g5_06a <- relevel(regData_noPemba$g5_06a,"No Schooling")
+
 
 multinom_noPemba2 <- multinom(formula =meta_cod~ site + sex +g4_08 + g5_06a + g1_06m, 
                              data = regData_noPemba,maxit=1000,
@@ -261,11 +269,9 @@ xform_noPemba2 <- list(categoryorder = "array",
                                         "siteUP",
                                         "siteBohol",
                                         "siteDar",
-                                        "g5_06aNo Schooling",
+                                        "g5_06aPrimary School",
                                         "g5_06aHigh School",
                                         "g5_06aCollege or Higher",
-                                        "g5_06aUnknown",
-                                        "g1_06mJanuary",
                                         "g1_06mFebruary",
                                         "g1_06mMarch",
                                         "g1_06mApril",
@@ -275,6 +281,7 @@ xform_noPemba2 <- list(categoryorder = "array",
                                         "g1_06mAugust",
                                         "g1_06mSeptember",
                                         "g1_06mOctober",
+                                        "g1_06mNovember",
                                         "g1_06mDecember"))
 
 
@@ -292,3 +299,55 @@ plot_ly(z=round(log(tidy_multinom_noPemba2$std.error),3),
           "std. error:", round(tidy_multinom_noPemba2$std.error, 3)
         )) %>%
   layout(xaxis = xform_noPemba2, title="Std. Errors after removing Pemba and Unknown Month of Death") 
+
+
+
+#### Stratify by Site and Regress on Month of Death ##### 
+
+site_plots <- list()
+std_error_plots <- list()
+i = 1
+xform_stratify <- list(categoryorder = "array",
+                       categoryarray = c("(Intercept)",
+                                         "sexFemale",
+                                         "g4_08No",
+                                         "g5_06aPrimary School",
+                                         "g5_06aHigh School",
+                                         "g5_06aCollege or Higher",
+                                         "g1_06mFebruary",
+                                         "g1_06mMarch",
+                                         "g1_06mApril",
+                                         "g1_06mMay",
+                                         "g1_06mJune",
+                                         "g1_06mJuly",
+                                         "g1_06mAugust",
+                                         "g1_06mSeptember",
+                                         "g1_06mOctober",
+                                         "g1_06mNovember",
+                                         "g1_06mDecember"))
+for(k in unique(regData_noPemba$site)){ 
+  multinom_bysite <- multinom(formula =meta_cod~ sex +g4_08 + g5_06a + g1_06m, 
+                                data = regData_noPemba[site==k],maxit=1000,
+                                family="multinomial",MaxNWts =1000, reltol=1.0e-12)
+  
+  tidy_multinom <- tidy(multinom_bysite)
+  site_plots[[i]] <- plot_ly(z=round(log(tidy_multinom$estimate),3),
+          type="heatmap",
+          zmin = -10,
+          zmax = 10,
+          y=tidy_multinom$y.level,x=tidy_multinom$term,
+          text=paste(
+            "std. error:", round(tidy_multinom$std.error, 3)
+          )) %>%
+    layout(xaxis = xform_stratify, title=paste0("Regression for Site ", k, "(No Unknown Schooling and Month of Death)"))
+  
+  
+  std_error_plots[[i]] <- plot_ly(z=round(tidy_multinom$std.error,3),
+          type="heatmap",y=tidy_multinom$y.level,x=tidy_multinom$term) %>%
+    layout(xaxis = xform_stratify, paste0(title="Std. Errors for Site ", k, "(No Unknown Schooling and Month of Death)"))
+  
+  i=i+1
+  }
+
+
+
