@@ -334,12 +334,13 @@ for(k in unique(regData_noPemba$site)){
   site_plots[[i]] <- plot_ly(z=round(log(tidy_multinom$estimate),3),
           type="heatmap",
           zmin = -10,
+          zmid=0,
           zmax = 10,
           y=tidy_multinom$y.level,x=tidy_multinom$term,
           text=paste(
             "std. error:", round(tidy_multinom$std.error, 3)
           )) %>%
-    layout(xaxis = xform_stratify, title=paste0("Regression for Site ", k, "(No Unknown Schooling and Month of Death)"))
+    layout(xaxis = xform_stratify, title=paste0("Regression for ", k, " (No Unknown Schooling and Month of Death)"))
   
   
   std_error_plots[[i]] <- plot_ly(z=round(tidy_multinom$std.error,3),
