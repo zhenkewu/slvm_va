@@ -10,6 +10,7 @@ This code loads in the PHMRC VA data and fits it to the RLCM developed in the re
 ```{r setup}
 ## load the libraries needed 
 rm(list=ls())
+library(gplots)
 library(rewind)
 library(data.table)
 library(mcclust.ext)
@@ -42,7 +43,13 @@ sampleData$Cause <- NULL
 sampleData <- as.matrix(sampleData)
 
 ```
+### Exploratory Analysis (Clustering)
 
+```{r heatmaps}
+
+heatmap.2(sampleData,col = bluered(100))
+
+```
 ## Define Model Options 
 
 The following code defines the parameters for the RCLM. 
