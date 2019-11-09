@@ -47,7 +47,11 @@ sampleData <- as.matrix(sampleData)
 
 ```{r heatmaps}
 
-heatmap.2(sampleData,col = bluered(100))
+labs <- colnames(sampleData)[heatmap$colInd]
+
+heatmap <- heatmap.2(sampleData,col = bluered(100),
+                     Colv=FALSE, dendrogram = 'row',labRow = FALSE, labCol = "",
+                     add.expr = text(x = seq_along(labs), y = -4, srt = 180, labels = labs, xpd = TRUE))
 
 ```
 ## Define Model Options 
