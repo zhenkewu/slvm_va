@@ -301,8 +301,9 @@ plot_ly(z=round(log(tidy_multinom_noPemba2$std.error),3),
   layout(xaxis = xform_noPemba2, title="Std. Errors after removing Pemba and Unknown Month of Death") 
 
 
-
+### ----------------------------------------------
 #### Stratify by Site and Regress on Month of Death ##### 
+### ----------------------------------------------
 
 site_plots <- list()
 std_error_plots <- list()
@@ -344,8 +345,12 @@ for(k in unique(regData_noPemba$site)){
   
   
   std_error_plots[[i]] <- plot_ly(z=round(tidy_multinom$std.error,3),
-          type="heatmap",y=tidy_multinom$y.level,x=tidy_multinom$term) %>%
-    layout(xaxis = xform_stratify, paste0(title="Std. Errors for Site ", k, "(No Unknown Schooling and Month of Death)"))
+          type="heatmap",
+          zmin = 0,
+          zmid = 1,
+          zmax = 2,
+          y=tidy_multinom$y.level,x=tidy_multinom$term) %>%
+    layout(xaxis = xform_stratify, title=paste0("Std. Errors for Site ", k, "(No Unknown Schooling and Month of Death)"))
   
   i=i+1
   }
