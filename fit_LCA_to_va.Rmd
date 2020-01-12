@@ -5,66 +5,183 @@ output: html_document
 
 ## Structured Latent Variable Model to Verbal Autopsy Data
 
-This code loads in the PHMRC VA data and fits it to the RLCM developed in the rewind package 
+This code loads in the PHMRC VA data and fits it to the BayesLCA package. 
 
 ```{r setup}
 ## load the libraries needed 
 rm(list=ls())
 library(gplots)
+library(ggplot2)
 library(rewind)
 library(data.table)
 library(mcclust.ext)
 library(BayesLCA)
-
+library(poLCA)
 ```
 
 
 ```{r load_data}
-
 # toy data 
 data("Alzheimer")
 alz <- data.blca(Alzheimer)
 
 set.seed(11082019)
-
-# 3 classes
+# run the algorithm for 3 classes
 sj3.em <- blca.em(alz, G=3, restarts =20)
 plot(sort(sj3.em$lpstarts), sequence(table(round(sj3.em$lpstarts, 2))),
      main = "Converged Values", xlab = "Log-Posterior", ylab = "Frequency")
-
 ## posterior SD:
 blca.em.sd(sj3.em, alz)
 
 ```
 
 ```{r va_data}
-
+setwd("/Users/irena/repos/slvm_va/")
 ## load in VA data - the data values should all take one of these formats:
 #1 (for yes), 0 (for no), or NA for missing values 
-vaData <- data.table(read.csv("~/Dropbox/Irena/verbal_autopsy_data/data_freeze/datafreeze_07292019_binary.csv"))
+vaData <- data.table(read.csv("~/Dropbox/Irena/verbal_autopsy/data/data_freeze/datafreeze_07292019_binary.csv"))
 
 ## For now, remove the demographic variables and only use the symptoms 
-dropList <- c("site", "newid", "g1_06y", "g1_06m", "g1_06d")
+dropList <- c("site", "newid", "g1_06y", "g1_06m", "g1_06d", "g1_05_s1")
 vaMatrix <- vaData[, !colnames(vaData) %in% dropList, with=FALSE]
-## only keep symptoms that have most of their data 
+## only keep symptoms that have most of their data (95% non missing) (following McCormick & Li's approach)
 binaryMatrix <- vaMatrix[, colSums(is.na(vaMatrix)) <= 0.05*nrow(vaMatrix),with=FALSE]
 
 ## remove the rows that have at least 1 NA 
 binarySubset <- na.omit(binaryMatrix)
 
-sampleData  <- binarySubset[sample(nrow(binarySubset),300),]
+#sampleData  <- binarySubset[sample(nrow(binarySubset),300),]
 
 ## Keep the "gold standard" diagnoses for evaluation after the model is done 
-truth_values <- sampleData[,c(1:2)]
-sampleData$gs_text34 <- NULL
-sampleData$Cause <- NULL
+truth_values <- binarySubset [,c(1:2)]
+binarySubset$gs_text34 <- NULL
+binarySubset$Cause <- NULL
 
 ## data should be in matrix form 
-sampleData <- as.matrix(sampleData)
+sampleData <- as.matrix(binarySubset)
+
+## try 10 CoD classes for now 
+#lca_va <- blca.em(sampleData, G=10, restarts =50)
+
+## Gibbs sampling (still with 10 classes):
+set.seed(11252019)
+num_class <- 10 
+lca_va_gibbs <- blca.gibbs(sampleData, G=num_class, burn.in = 500, thin = 1/10, iter = 1000)
+raftery.diag <- raftery.diag(as.mcmc(lca_va_gibbs))
+```
+
+```{r visualize_results}
+#pdf("~/Downloads/item_probabilities_by_class_1.pdf",height=6,width=6); 
+par(mfrow=c(3,1));for (k in 1:num_class){barplot(lca_va_gibbs$itemprob[k,], main=paste0("class ", k),ylim=c(0,1))}#;dev.off()
+
+graphData <- data.table(lca_va_gibbs$itemprob)
+graphData$class <- c("Class 1","Class 2", "Class 3", "Class 4", "Class 5", "Class 6",
+                 "Class 7", "Class 8", "Class 9", "Class 10")
+
+graphData <- melt(graphData, id.vars="class", variable.name = "symptom", value.name="prob")
+graphData$color <- "0"
+
+## orange for a1 symptoms 
+graphData[grepl("a1_",symptom), color:='#FFA500']
+
+## blue for a1_01 symptoms (fever + rash)
+graphData[grepl("a2_0",symptom), color:='#0000bc'] 
+## deep periwinkle for ulcer/pus symptoms 
+graphData[grepl(paste(c("a2_10", "a2_11", "a2_12",
+                        "a2_13", "a2_14", "a2_15"),collapse = "|"),symptom), color:='#375ac4']
+
+## weight loss + yellow/pale 
+graphData[grepl(paste(c("a2_16", "a2_18", "a2_17"),collapse = "|"),symptom), color:='#4a66bb']
+
+## microsoft blue for a2_2 symptoms (puffiness and swelling)
+graphData[grepl("a2_2",symptom), color:='#1458ea']  #6e6eff
+
+## neon blue for lumps
+graphData[grepl(paste(c("a2_29", "a2_30", "a2_31"),collapse = "|"),symptom),
+          color:='#635fff'] 
+
+## light purple blue for a2_32, a2_33, a2_34 symptoms (cough/coughing blood)
+graphData[grepl(paste(c("a2_32", "a2_33", "a2_34", "a2_35"),collapse = "|"),symptom), color:='#9491fa']
+
+## teal for fast breathing and pain in chest 
+graphData[grepl(paste(c("a2_36", "a2_37","a2_40", "a2_41", "a2_42",
+                        "a2_43","a2_44","a2_45"),collapse = "|"),symptom), color:='#0e64a4']
+## saturated cerulean for blood in vomit + stool symptoms 
+graphData[grepl(paste(c("a2_47", "a2_48","a2_49","a2_50","a2_51", "a2_52", "a2_53", "a2_54", "a2_55", "a2_56"),collapse = "|"),symptom), color:='#1c6875']
+
+## muted teal for swallowing symptoms 
+graphData[grepl(paste(c("a2_57", "a2_58", "a2_60"),collapse = "|"),symptom), color:='#3d8c9b']
+## blue for a2_6 symptoms  belly pain +  protrusion 
+graphData[grepl("a2_6",symptom), color:='#6bbbc9'] 
+## blue for a2_7, a2_8 symptoms (confusion)
+graphData[grepl(paste(c("a2_7","a2_8"),collapse="|"),symptom), color:='#8cd8e6']
+## blue for a2_8 symptoms (paralysis)
+graphData[grepl(paste(c("a2_85", "a2_86","a2_87"),collapse = "|"),symptom), color:='#5ab1f1']
+## purple for a3 symptoms 
+graphData[grepl("a3_",symptom), color:='#5C2392']
+## pink for a4 symptoms 
+graphData[grepl("a4_",symptom), color:='#ff8da1']
+## green for a5 symptoms 
+graphData[grepl("a5_",symptom), color:='#006600']
+## magenta for gender + age
+graphData[grepl("g1_",symptom), color:='#e141b9']
+
+group_colors <- c('#FFA500','#0000bc',"#375ac4",'#4a66bb','#1458ea','#635fff','#9491fa','#0e64a4','#1c6875',
+  '#3d8c9b','#6bbbc9','#8cd8e6','#5ab1f1','#5C2392','#ff8da1','#006600','#e141b9')
+
+symptom_groups <- c("Disease History",
+                    "Fever/Rash","Ulcer/Pus","Weight Loss/Pallid Face","Swelling/Puffiness","Lumps in Neck/Armpit/Groin","Coughing","Fast Breathing/Chest Pain", "Blood in Vomit/Stool","Difficulty Swallowing","Belly Pain/Protrusion","Confusion", "Paralysis",
+                    "Female-Specific", "Tobacco/Alcohol", "External Injury", "Demographic")
+
+colGroups <- data.table(cbind(group_colors, symptom_groups))
+colnames(colGroups)[1] <- "color"
+  
+cols <- graphData$color
+names(cols) <- graphData$symptom
+
+graphData <- merge(graphData, colGroups, by="color")
+graphData$symptom_groups <- factor(graphData$symptom_groups, levels=symptom_groups)
+
+## set the legend 
+colScale <- copy(group_colors)
+names(colScale) <- symptom_groups
+
+## plot the symptom probabilities by class 
+plot_list <- list()
+for(k in unique(graphData$class)){
+  plot_list[[k]]<- ggplot(data=graphData[class==k]) +
+   geom_bar(aes(x = symptom, y = prob, group=symptom, fill=symptom_groups), stat="identity") +
+    scale_fill_manual("Symptom",values=colScale) +
+    scale_x_discrete(breaks = graphData[class==k]$symptom[c(T,F,F)]#, labels = c("A", "B", "C")
+                     ) +
+     labs(title=paste0("Symptom Probabilities by ", k)) +
+     theme(axis.text.x = element_text(size=6.5,angle =45, vjust = 1, hjust = 1))
+}
 
 
-lca_va <- blca.em(sampleData, G=34, restarts =20)
+pdf(width=8,height=6,"class_probabilities_by_symptoms.pdf")
+invisible(lapply(plot_list, print))
+dev.off()
 
 
+
+classProbSums <- rowSums(lca_va_gibbs$itemprob)
+names(classProbSums) <- c("Class 1","Class 2", "Class 3", "Class 4", "Class 5", "Class 6",
+                 "Class 7", "Class 8", "Class 9", "Class 10")
+sort(classProbSums, decreasing=TRUE)
+
+```
+
+```{r diagnostic_results}
+# diagnostic plot of the sampling run 
+par(mfrow = c(4, 3))
+plot(lca_va_gibbs,which=5)
+
+
+par(mfrow = c(4, 3))
+plot(lca_va_gibbs,which=3)
+
+## posterior SD:
+blca.gibbs.sd(lca_va_gibbs, sampleData)
 
 ```
